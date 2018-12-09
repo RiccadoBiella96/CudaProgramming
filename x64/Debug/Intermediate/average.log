@@ -1,0 +1,16 @@
+﻿C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\VC\VCTargets\Microsoft.CppBuild.targets(376,5): warning MSB8004: la directory Intermediate non termina con una barra finale. Nell'istanza della compilazione verrà aggiunta la barra poiché è necessaria per consentire la corretta valutazione della directory Intermediate.
+  main.cpp
+c:\users\riccardo\desktop\3anno\multimedia\cuda\average_filter\average_filter\src\utilities\stb_image_write.h(233): warning C4996: 'fopen': This function or variable may be unsafe. Consider using fopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.17134.0\ucrt\stdio.h(208): note: vedere la dichiarazione di 'fopen'
+c:\users\riccardo\desktop\3anno\multimedia\cuda\average_filter\average_filter\src\utilities\stb_image_write.h(629): warning C4996: 'sprintf': This function or variable may be unsafe. Consider using sprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.17134.0\ucrt\stdio.h(1774): note: vedere la dichiarazione di 'sprintf'
+c:\users\riccardo\desktop\3anno\multimedia\cuda\average_filter\average_filter\src\utilities\stb_image_write.h(1013): warning C4996: 'fopen': This function or variable may be unsafe. Consider using fopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.17134.0\ucrt\stdio.h(208): note: vedere la dichiarazione di 'fopen'
+c:\users\riccardo\desktop\3anno\multimedia\cuda\average_filter\average_filter\src\main.cpp(19): warning C4996: 'scanf': This function or variable may be unsafe. Consider using scanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.17134.0\ucrt\stdio.h(1274): note: vedere la dichiarazione di 'scanf'
+c:\users\riccardo\desktop\3anno\multimedia\cuda\average_filter\average_filter\src\main.cpp(48): warning C4018: '<': errata corrispondenza tra signed e unsigned
+  average.vcxproj -> C:\Users\Riccardo\Desktop\3Anno\Multimedia\Cuda\average_filter\average_filter\x64\Debug\average.exe
+  copy "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\bin\cudart*.dll" "C:\Users\Riccardo\Desktop\3Anno\Multimedia\Cuda\average_filter\average_filter\x64\Debug\"
+  C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\bin\cudart32_100.dll
+  C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\bin\cudart64_100.dll
+          2 file copiati.
