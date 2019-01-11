@@ -11,8 +11,8 @@
 // Utilities and system includes
 #include <helper_cuda.h>
 
-// Con questo visual studio riconosce blockId etc...
 #include "device_launch_parameters.h"
+
 
 static // Print device properties
 void printDevProp(cudaDeviceProp devProp)
@@ -75,10 +75,8 @@ __global__ static void readChannel(
 {
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
-
-	int i = (y * (imageW * numChannels)) + x*numChannels + channelToExtract;
-	int i_mono = (y * (imageW)) + x +channelToExtract;
-	
+	int i = (y * (imageW * numChannels)) + (x * numChannels) + channelToExtract;
+	int i_mono = (y * (imageW)+x);
 	channelData[i_mono] = source[i];
 }
 
@@ -92,10 +90,8 @@ __global__ static void writeChannel(
 {
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
-
-	int i = (y * (imageW * numChannels)) + x*numChannels + channelToMerge;
-	int i_mono = (y * (imageW)) + x + channelToMerge;
-
+	int i = (y * (imageW * numChannels)) + (x * numChannels) + channelToMerge;
+	int i_mono = (y * (imageW)+x);
 	destination[i] = (channelData[i_mono]);
 }
 
@@ -103,62 +99,16 @@ __global__ static void writeChannel(
 * AVERAGE FILTER
 ******************************************************************************/
 
-__global__ static void compute_average(
-	unsigned char* d_Dst,
-	unsigned char* d_Src,
+__global__ void compute_average(
+	unsigned char* h_Dst,
+	unsigned char* h_Src,
 	int imageW,
 	int imageH)
 {
-	__shared__ unsigned char sharedMemory[32*32];
-
-	int y = 
-	int x = blockIdx.x * blockDim.x + threadIdx.x;
-
-	//calcolo le posizioni
-
-	int y1 = blockIdx.y * blockDim.y + threadIdx.y - KERNEL_RADIUS;
-	int x1 = blockIdx.x * blockDim.x + threadIdx.x - KERNEL_RADIUS;
-	
-	if (x1 <0 || x1 > imageW || y1 < 0 || y1 > imageH) {
-		sharedMemory[y1 * 32 + x1] = 0;
-	}
-	else {
-		sharedMemory[y1 * 32 + x1] = d_Src[y1 * 32 + x1];
-	}
-
-	int y2 = blockIdx.y * blockDim.y + threadIdx.y - KERNEL_RADIUS;
-	int x2 = blockIdx.x * blockDim.x + threadIdx.x + KERNEL_RADIUS;
-
-	if (x2 <0 || x2 > imageW || y2 < 0 || y2 > imageH) {
-		sharedMemory[y2 * 32 + x2] = 0;
-	}
-	else {
-		sharedMemory[y2 * 32 + x2] = d_Src[y2 * 32 + x2];
-	}
-
-	int y3 = blockIdx.y * blockDim.y + threadIdx.y + KERNEL_RADIUS;
-	int x3 = blockIdx.x * blockDim.x + threadIdx.x - KERNEL_RADIUS;
-
-	if (x3 <0 || x3 > imageW || y3 < 0 || y3 > imageH) {
-		sharedMemory[y3 * 32 + x3] = 0;
-	}
-	else {
-		sharedMemory[y3 * 32 + x3] = d_Src[y3 * 32 + x3];
-	}
-
-	int y4 = blockIdx.y * blockDim.y + threadIdx.y + KERNEL_RADIUS;
-	int x4 = blockIdx.x * blockDim.x + threadIdx.x + KERNEL_RADIUS;
-
-	if (x4 <0 || x4 > imageW || y4 < 0 || y4 > imageH) {
-		sharedMemory[y4 * 32 + x4] = 0;
-	}
-	else {
-		sharedMemory[y4 * 32 + x4] = d_Src[y4 * 32 + x4];
-	}
-
-	__syncthreads();
-
 	const unsigned int numElements = ((2 * KERNEL_RADIUS) + 1) * ((2 * KERNEL_RADIUS) + 1);
+
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
 
 	unsigned int sum = 0;
 	for (int kY = -KERNEL_RADIUS; kY <= KERNEL_RADIUS; kY++) {
@@ -173,55 +123,120 @@ __global__ static void compute_average(
 				continue;
 			}
 
-			const int curPosition = (curY * 32 + curX);
+			const int curPosition = (curY * imageW + curX);
 			if (curPosition >= 0 && curPosition < (imageW * imageH)) {
-				sum += sharedMemory[curPosition];
+				sum += h_Src[curPosition];
 			}
 		}
 	}
-	d_Dst[y * imageW + x] = (unsigned char)(sum / numElements);
-	//d_Dst[i_mono] = d_Src[i_mono];
+	h_Dst[y * imageW + x] = (unsigned char)(sum / numElements);
 }
 
+__global__ void compute_average_shared(
+	unsigned char* h_Dst,
+	unsigned char* h_Src,
+	int imageW,
+	int imageH)
+{
+	const unsigned int numElements = ((2 * KERNEL_RADIUS) + 1) * ((2 * KERNEL_RADIUS) + 1);
+
+	// dichiaro una shared di 32*32 per contenere la cella di 16*16 e i pixel intorno (8 per ogni lato)
+	__shared__ unsigned char sharedMemory[32][32];
+
+	// Array per memorizzare le coordinate del blocco da caricare
+	int x_p[4];
+	int y_p[4];
+
+	// in alto a sinistra
+	y_p[0] = blockIdx.y * blockDim.y + threadIdx.y - KERNEL_RADIUS;
+	x_p[0] = blockIdx.x * blockDim.x + threadIdx.x - KERNEL_RADIUS;
+
+	// in alto a destra
+	y_p[1] = blockIdx.y * blockDim.y + threadIdx.y - KERNEL_RADIUS;
+	x_p[1] = blockIdx.x * blockDim.x + threadIdx.x + KERNEL_RADIUS;
+
+	// in basso a sinistra
+	y_p[2] = blockIdx.y * blockDim.y + threadIdx.y + KERNEL_RADIUS;
+	x_p[2] = blockIdx.x * blockDim.x + threadIdx.x - KERNEL_RADIUS;
+
+	// in basso a destra
+	y_p[3] = blockIdx.y * blockDim.y + threadIdx.y + KERNEL_RADIUS;
+	x_p[3] = blockIdx.x * blockDim.x + threadIdx.x + KERNEL_RADIUS;
+
+	//// ciclo le coordinate per correggere quelle che sono vicino a uno o più bordi
+	//for (int i = 0; i < 4; i++) {
+	//	if (y_p[i] < 0)
+	//		y_p[i] = 0;
+	//	if (x_p[i] < 0)
+	//		x_p[i] = 0;
+	//	if (y_p[i] > imageH)
+	//		y_p[i] = imageH;
+	//	if (x_p[i] > imageW)
+	//		x_p[i] = imageW;
+	//}
+
+	// in alto a sinistra
+	sharedMemory[threadIdx.x][threadIdx.y] = (y_p[0] < 0 || x_p[0] < 0) ? 0 : h_Src[x_p[0] + y_p[0] * imageW];
+	// in alto a destra
+	sharedMemory[threadIdx.x + KERNEL_RADIUS][threadIdx.y] = (y_p[1] < 0 || x_p[1] > imageW) ? 0 : h_Src[x_p[1] + y_p[1] * imageW];
+	// in basso a sinistra
+	sharedMemory[threadIdx.x - KERNEL_RADIUS][threadIdx.y + KERNEL_RADIUS] = (y_p[2] > imageH || x_p[2] < 0) ? 0 : h_Src[x_p[2] + y_p[2] * imageW];
+	// in basso a destra
+	sharedMemory[threadIdx.x + KERNEL_RADIUS][threadIdx.y + KERNEL_RADIUS] = (y_p[3] > imageH || x_p[3] > imageW) ? 0 : h_Src[x_p[3] + y_p[3] * imageW];
+
+	__syncthreads();
+
+	int y = threadIdx.y;
+	int x = threadIdx.x;
+
+	unsigned int sum = 0;
+	for (int kY = -KERNEL_RADIUS; kY <= KERNEL_RADIUS; kY++) {
+		for (int kX = -KERNEL_RADIUS; kX <= KERNEL_RADIUS; kX++) {
+			sum += sharedMemory[y][x];
+		}
+	}
+
+	int yImage = blockIdx.y * blockDim.y + threadIdx.y;
+	int xImage = blockIdx.x * blockDim.x + threadIdx.x;
+	h_Dst[yImage * imageW + xImage] = (unsigned char)(sum / numElements);
+}
+
+
+
 void average_gpu(
-	unsigned char* host_inputImage,
-	unsigned char* host_outputImage,
+	unsigned char* inputImage,
+	unsigned char* outputImage,
 	int imageW,
 	int imageH,
 	int numChannels
 ) {
+	int size = imageW * imageH * 3 * sizeof(unsigned char);
 
-	unsigned char* device_inputImage;
-	unsigned char* device_outputImage;
+	unsigned char* d_inputImage;
+	unsigned char* d_outputImage;
 
-	unsigned char*  in_channel;
-	unsigned char*  out_channel;
+	cudaMalloc((void **)&d_inputImage, size);
+	cudaMalloc((void **)&d_outputImage, size);
 
-	cudaMalloc(&in_channel, imageW * imageH * sizeof(unsigned char));
-	cudaMalloc(&out_channel, imageW * imageH * sizeof(unsigned char));
+	unsigned char* d_in_channel;
+	unsigned char* d_out_channel;
+
+	cudaMalloc((void **)&d_in_channel, size / 3);
+	cudaMalloc((void **)&d_out_channel, size / 3);
 
 	int curChannel;
-	dim3 dimBlok(16,16);
-	dim3 dimGrid((imageW / dimBlok.x), (imageH / dimBlok.y));
+	dim3 dimBlock(16, 16);
+	dim3 dimGrid(imageW / dimBlock.x, imageH / dimBlock.y);
 
-	// FIXME: copy from CPU to GPU (inputImage --> GPU)
-
-
-	cudaMalloc(&device_inputImage, imageW * imageH * 3 * sizeof(unsigned char));
-	cudaMalloc(&device_outputImage, imageW * imageH * 3 * sizeof(unsigned char));
-
-	cudaMemcpy(device_inputImage, host_inputImage, imageW * imageH * 3 * sizeof(unsigned char), cudaMemcpyHostToDevice);
-
-	// average GPU
+	cudaMemcpy(d_inputImage, inputImage, size, cudaMemcpyHostToDevice);
 
 	for (curChannel = 0; curChannel < numChannels; curChannel++) {
-		readChannel <<< dimGrid, dimBlok >> > (in_channel, device_inputImage, imageW, imageH, curChannel, numChannels);
-		compute_average << < dimGrid, dimBlok >> > (out_channel, in_channel, imageW, imageH);
-		writeChannel <<< dimGrid, dimBlok >> > (device_outputImage, out_channel, imageW, imageH, curChannel, numChannels);
+		readChannel << <dimGrid, dimBlock >> > (d_in_channel, d_inputImage, imageW, imageH, curChannel, numChannels);
+		compute_average << <dimGrid, dimBlock >> > (d_out_channel, d_in_channel, imageW, imageH);
+		writeChannel << <dimGrid, dimBlock >> > (d_outputImage, d_out_channel, imageW, imageH, curChannel, numChannels);
 	}
 
-	// FIXME: Copy back to CPU (GPU --> outputImage)
-
-	cudaMemcpy(host_outputImage, device_outputImage, imageW * imageH * 3 * sizeof(unsigned char), cudaMemcpyDeviceToHost);
+	cudaMemcpy(outputImage, d_outputImage, size, cudaMemcpyDeviceToHost);
+	cudaFree(d_in_channel);
+	cudaFree(d_out_channel);
 }
-
